@@ -1,0 +1,20 @@
+python-dotenv
+pyvis
+openai
+rdflib
+SPARQLWrapper
+networkx
+matplotlib
+scikit-learn
+jupyter
+numpy
+pandas
+shap #?
+pyvis
+pydantic
+
+openai
+xai_sdk
+google-genai
+google-generativeai
+python-toon

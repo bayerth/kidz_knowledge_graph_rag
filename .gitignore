@@ -1,0 +1,6 @@
+.venv*
+.env*
+/tmp
+/src/tmp/
+/src/tests
+/notebooks
