@@ -2,6 +2,7 @@ import copy
 import json
 import time
 import logging
+import traceback
 from pathlib import Path
 from google.genai import types
 
@@ -57,8 +58,21 @@ def get_print_logger(name="print_logger", msg_producer=default_log, level=loggin
 logger = get_print_logger("LLM-Connector")
 
 
+def append_to_json_file(message, filename=None):
+    filename = filename if filename.endswith(".json") else filename + ".json"
+    path = Path(filename)
+    if path.exists():
+        content = path.read_text(encoding="utf-8")
+        if content.strip():
+            data = json.loads(content)
+            if not isinstance(data, dict):
+                data = {}
+            data[str(time.time())] = message
+            path.write_text(json.dumps(data, indent=4), encoding="utf-8")
+
+
 class LLMCClient:
-    def __init__(self, client, model, filename=None, logger=logger):
+    def __init__(self, client, model, filename=None, write_to_file=False, append=False, logger=logger):
         self.client = client
         self.model = model
         self.logger = logger
@@ -68,6 +82,8 @@ class LLMCClient:
         self.total_runtime = 0
         self.history = []
         self.filename = filename
+        self.write_to_file = write_to_file
+        self.append = append
         self.response = None
 
     def get_client(self):
@@ -93,20 +109,29 @@ class LLMCClient:
         self.total_reasoning_tokens = 0
         self.total_runtime = 0
 
-    def write_json(self, message, filename=None):
+    def write_json(self, message, filename=None, append=False):
+        # todo: check if append_to_json_file is better
         filename = filename if filename is not None else self.filename
+        if filename and not filename.endswith(".json"):
+            filename += ".json"
         try:
-            Path(filename).write_text(json.dumps(message, encoding="utf-8"))
+            append = append or self.append
+            if append:
+                append_to_json_file(filename=filename, message=message)
+            else:
+                Path(filename).write_text(json.dumps(message), encoding="utf-8")
         except Exception as e:
             logger.error(f"Error writing JSON file: {e}")
+            logger.debug(f"Stacktrace:\n{traceback.format_exc()}")
 
     def write_history(self, filename):
         self.write_json(self.history, filename)
 
     def send_request(self, user_message, system_message=None, ignore_history=False, temperature=0, write_to_file=False,
+                     append=False,
                      **kwargs
                      ):
-        logger.debug(f"-- GPT Request started. Used model: {self.model} --")
+        logger.info(f"-- GPT Request started. Used model: {self.model} --")
         self.logger.debug(f"Prompt: {user_message}")
         start = time.time()
         response_msg, prompt_tokens, completion_tokens, reasoning_tokens, runtime = self.call_client(
@@ -114,13 +139,22 @@ class LLMCClient:
                 system_message=system_message,
                 ignore_history=ignore_history,
                 temperature=0,
+                write_to_file=write_to_file,
                 **kwargs
                 )
         end = time.time()
         runtime = end - start
-        self.logger.debug(
+        self.logger.info(
                 f"runtime: {runtime:.3f}s, prompt_tokens: {prompt_tokens:,.0f}, completion_tokens: {completion_tokens:,.0f}, reasoning_tokens: {reasoning_tokens:,.0f}, "
                 )
+        try:
+            if write_to_file or self.write_to_file:
+                # Persist a simplified trace of the conversation
+                self.write_json(self.history, filename=self.filename)
+        except Exception as e:
+            self.logger.error(f"Error writing history: {e}")
+            self.logger.debug(f"Stacktrace:\n{traceback.format_exc()}")
+
         self.total_runtime += runtime
         self.total_prompt_tokens += prompt_tokens
         self.total_completion_tokens += completion_tokens
@@ -191,6 +225,7 @@ class XAIClient(LLMCClient):
                 user_payload = f"{user_message}. Here is ontology retrieved information based on the topic: {retrieved_information}"
             else:
                 user_payload = user_message
+            self.history.append({"role": "user", "content": user_payload})
 
             chat.append(xai_user(user_payload))
 
@@ -201,11 +236,11 @@ class XAIClient(LLMCClient):
             runtime = end - start
             self.logger.debug(f"xAI Request took {runtime:.2f} seconds")
 
-            if write_to_file:
+            if write_to_file or self.write_to_file:
                 # Persist a simplified trace of the conversation
                 to_save = [] if ignore_history else list(self.history)
-                if system_message is not None:
-                    to_save.append({"role": "system", "content": system_message})
+                # if system_message is not None:
+                #     to_save.append({"role": "system", "content": system_message})
                 to_save.append({"role": "user", "content": user_payload})
                 self.write_json(to_save, filename=self.filename)
 
@@ -267,13 +302,10 @@ class OpenAIClient(LLMCClient):
             end = time.time()
             runtime = end - start
             self.logger.debug(f"GPT Request took {runtime} seconds")
-            if write_to_file:
-                # result = {"message": message, "response": response, "runtime": runtime}
-                result = message
-                self.write_json(result, filename=self.filename)
         except Exception as e:
             self.logger.error(f"API call failed: {e}")
             return None, None, None, None, None
+
         prompt_tokens, completion_tokens = 0, 0
         if response and response.choices:
             try:
@@ -293,6 +325,10 @@ class OpenAIClient(LLMCClient):
         else:
             response_message = "Error: No valid response from API."
             self.logger.error(response_message)
+        if write_to_file:
+            # result = {"message": message, "response": response, "runtime": runtime}
+            result = message
+            self.write_json(result, filename=self.filename)
         return response_message, prompt_tokens, completion_tokens, 0, runtime
 
 

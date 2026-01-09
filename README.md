@@ -9,7 +9,9 @@ A small Retrieval-Augmented Generation (RAG) prototype with a Tkinter GUI. It al
 - View outputs and logs directly in the GUI.
 
 This repository also contains utilities for working with evaluation question files and for visualizing retrieved
-ontology nodes as a graph (HTML) using PyVis.
+ontology nodes as a graph (HTML) using PyVis. Below is a screenshot of the GUI.
+
+![Screenshot](screenshot.png)
 
 Project layout
 

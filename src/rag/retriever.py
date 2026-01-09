@@ -76,7 +76,7 @@ def prepare_objects(llm_client, ontology: Ontology, user_query: str, previous_co
             no_class_found = False
         else:
             find_class_iterations += 1
-            
+
     if no_class_found:
         logger.info(f"No class found for query {user_query}, returning empty list.")
         return {}, None
@@ -153,8 +153,6 @@ def iterate_ontology(
     #     },
     # ]
     retrieved_node_dict = ontology.get_nodes(starting_nodes_id)
-    # starting_nodes = [ontology.get_node_structure(node) for node in retrieved_node_dict.values()]
-    # user_message = f"Here is a list of instances: {str(starting_nodes)}. To which of them refers this user query: {user_query}? Only use the correct one. You can ignore spelling error or cases. Return only JSON Syntax without prefix."
     found_node_instances = retrieved_node_dict.values()
 
     if found_node_instances is None:
@@ -165,11 +163,16 @@ def iterate_ontology(
 
     logger.info("--- RAG: Starting iterative ontology search")
     response_msg = ""
+    previous_node_instances = []
     loop_count = 0
     while STOP_TOKEN not in response_msg and loop_count < MAX_LOOPS:
         loop_count += 1
         if found_node_instances is None:
             found_node_instances = execute_query(response_msg, ontology)
+        if set(previous_node_instances) == set(found_node_instances):
+            logger.info(f"No new nodes found (saturation), stopping iterative search.")
+            break
+        previous_node_instances = found_node_instances
         logger.info(f"Iteration {loop_count} of {MAX_LOOPS}: Requested nodes: {len(found_node_instances)}")
         retrieved_information = []
         if found_node_instances:
@@ -182,7 +185,7 @@ def iterate_ontology(
         else:
             retrieved_information = "No instance exists for that ID. You asked for a class or searched for a non existing instance."
             logger.info(f"Iteration {loop_count}. No nodes where found.")
-        user_message = f"This is the result to your query: {retrieved_information}. If you need more information, use another query, otherwise write only {STOP_TOKEN}. Return only JSON Syntax without prefix."
+        user_message = f"This is the result to your query: {retrieved_information}. \n If you need more information, use another query embraced by <QUERY> </QUERY>, otherwise write only {STOP_TOKEN}. Return only JSON Syntax without prefix."
 
         response_msg, prompt_tokens, completion_tokens, reasoning_tokens, runtime = llm_client.send_request(
                 user_message=user_message,
@@ -191,7 +194,8 @@ def iterate_ontology(
                 logger=logger,
                 )
         found_node_instances = None
-    logger.info(f"Iterative search ended after iteration {loop_count}")
+
+    logger.info(f"Iterative search ended after iteration {loop_count - 1} of {MAX_LOOPS}")
     # logger.debug(
     #         f"Total input tokens: {total_input_tokens:,.0f}, Total completion tokens: {total_completion_tokens:,.0f}"
     #         )
@@ -368,6 +372,7 @@ def rag(question, ontology, llm_client, logger=default_logger):
             starting_nodes_id=found_node_instances_list,
             logger=logger
             )
+    logger.info(f"Creating answer for question: {question}")
     logger.debug(f"Retrieved relevant information: {retrieved_relevant_information}")
     logger.debug(f"Retrieved graph: {retrieved_node_dict}")
     llm_client.clear_history()
