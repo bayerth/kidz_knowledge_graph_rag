@@ -1,4 +1,4 @@
-KI BASIERTER DIGITALER ZWILLING (KIDZ) Retrieval Augmneted Generation Prototype
+KI BASIERTER DIGITALER ZWILLING (KIDZ) Retrieval Augmented Generation Prototype
 
 https://forschung.rwu.de/forschungsprojekte/ki-basierter-digitaler-zwilling-kidz
 
