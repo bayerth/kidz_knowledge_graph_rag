@@ -1,0 +1,28 @@
+[project]
+name = "rag-new"
+version = "0.1.0"
+description = "RAG project"
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "pyvis",
+    "openai",
+    "rdflib",
+    "SPARQLWrapper",
+    "networkx",
+    "matplotlib",
+    "scikit-learn",
+    "jupyter",
+    "numpy",
+    "pandas",
+    "shap",
+    "pydantic",
+    "xai_sdk",
+    "google-genai",
+    "google-generativeai",
+    "python-toon",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
